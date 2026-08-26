@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+  ADMIN
+}
+
+enum VerificationStatus {
+  PROJECTED
+  CONFIRMED
+}
+
+enum MfaType {
+  TOTP
+  EMAIL_OTP
+}
+
+model User {
+  id              String            @id @default(cuid())
+  email           String            @unique
+  passwordHash    String
+  emailVerifiedAt DateTime?
+  role            UserRole          @default(USER)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  profile         UserProfile?
+  security        UserSecurity?
+  sessions        UserSession[]
+  mfaFactors      MfaFactor[]
+  recoveryCodes   RecoveryCode[]
+  trackerRecords  FastingRecord[]
+  subscriptions   Subscription[]
+  auditLogs       AuditLog[]
+  emailOtps       EmailOtp[]
+}
+
+model UserProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  fullName          String?
+  countryRegion     String   @default("Nigeria")
+  timeZone          String   @default("Africa/Lagos")
+  language          String   @default("English")
+  hijriMethodology  String   @default("Projected civil/tabular baseline")
+  moonAuthority     String?
+  moonAdjustment    Int      @default(0)
+  calendarView      String   @default("Dashboard")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSecurity {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  loginAlerts     Boolean  @default(true)
+  mfaRequired     Boolean  @default(false)
+  lastPasswordAt  DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSession {
+  id          String   @id @default(cuid())
+  userId      String
+  userAgent   String?
+  ipAddress   String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  revokedAt   DateTime?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model MfaFactor {
+  id          String   @id @default(cuid())
+  userId      String
+  type        MfaType
+  secretHash  String
+  enabledAt   DateTime?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model EmailOtp {
+  id        String    @id @default(cuid())
+  userId    String
+  otpHash   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model CalendarDay {
+  id                       String             @id @default(cuid())
+  gregorianDate            DateTime           @unique
+  dayOfWeek                String
+  gregorianYear            Int
+  gregorianMonth           String
+  gregorianMonthNumber     Int
+  hijriYear                Int
+  hijriMonth               String
+  hijriMonthNumber         Int
+  hijriDay                 Int
+  primaryFastingCategory   String
+  allApplicableCategories  String
+  overlapCount             Int
+  overlapStatus            String
+  verificationStatus       VerificationStatus @default(PROJECTED)
+  sourceMethodology        String             @default("Projected civil/tabular baseline")
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  @@index([gregorianYear, gregorianMonthNumber])
+  @@index([hijriYear, hijriMonthNumber])
+  @@index([primaryFastingCategory])
+}
+
+model FastingRecord {
+  id             String   @id @default(cuid())
+  userId         String
+  gregorianDate  DateTime
+  fastingCategory String
+  status         String
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, gregorianDate])
+}
+
+model MoonSightingAnnouncement {
+  id                  String             @id @default(cuid())
+  hijriMonth          String
+  hijriYear           Int
+  confirmedStartDate  DateTime
+  authority           String
+  region              String             @default("Nigeria")
+  adjustmentVsProjection Int
+  verificationStatus  VerificationStatus @default(CONFIRMED)
+  notes               String?
+  publishedAt         DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([hijriYear, hijriMonth])
+}
+
+model Subscription {
+  id                   String           @id @default(cuid())
+  userId               String
+  plan                 SubscriptionPlan @default(FREE)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?          @unique
+  status               String           @default("inactive")
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([stripeCustomerId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}

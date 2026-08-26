@@ -1,0 +1,11 @@
+node_modules
+.next
+.local-logs
+.env
+.env.local
+.env.production
+coverage
+dist
+out
+backups
+*.log
