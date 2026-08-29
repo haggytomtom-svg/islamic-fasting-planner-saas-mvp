@@ -5,6 +5,7 @@ import { registerSchema } from "@/lib/validators";
 import { signupLimiter } from "@/lib/rate-limit";
 import { sendVerificationEmail } from "@/lib/email";
 import { createAuditLog } from "@/lib/audit";
+import crypto from "crypto";
 
 export async function POST(request: Request) {
   try {

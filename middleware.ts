@@ -5,10 +5,13 @@ const publicRoutes = [
   "/",
   "/login",
   "/signup",
+  "/onboarding",
+  "/billing",
+  "/status",
   "/api/auth",
   "/api/health",
   "/api/stripe/webhook",
-  "/status",
+  "/api/moon-sighting",
 ];
 
 export function middleware(request: NextRequest) {
