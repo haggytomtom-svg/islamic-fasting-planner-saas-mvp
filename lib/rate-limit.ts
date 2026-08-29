@@ -1,23 +1,32 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
+function isConfigured(val?: string): boolean {
+  if (!val || val.trim() === "") return false;
+  if (val.includes("placeholder")) return false;
+  return true;
+}
+
 function createRedis() {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-  if (!url || !token) {
-    console.warn("[RateLimit] Upstash Redis not configured — rate limiting disabled.");
+  if (!isConfigured(url) || !isConfigured(token)) {
     return null;
   }
 
-  return new Redis({ url, token });
+  try {
+    return new Redis({ url: url!, token: token! });
+  } catch (err) {
+    console.warn("[RateLimit] Failed to initialize Redis client:", err);
+    return null;
+  }
 }
 
 const redis = createRedis();
 
 function createLimiter(prefix: string, requests: number, window: string) {
   if (!redis) {
-    // Return a no-op limiter when Redis is not configured (local dev).
     return {
       async limit(_identifier: string) {
         return { success: true, limit: requests, remaining: requests, reset: 0 };
@@ -25,12 +34,23 @@ function createLimiter(prefix: string, requests: number, window: string) {
     };
   }
 
-  return new Ratelimit({
+  const ratelimit = new Ratelimit({
     redis,
     prefix: `ifp:${prefix}`,
     limiter: Ratelimit.slidingWindow(requests, window as `${number} ${"s" | "m" | "h" | "d"}`),
     analytics: true,
   });
+
+  return {
+    async limit(identifier: string) {
+      try {
+        return await ratelimit.limit(identifier);
+      } catch (err) {
+        console.warn(`[RateLimit] Error checking limit for ${prefix}:`, err);
+        return { success: true, limit: requests, remaining: requests, reset: 0 };
+      }
+    },
+  };
 }
 
 /** 5 login attempts per 15 minutes per IP */
